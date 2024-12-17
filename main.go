@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/thedevsaddam/renderer"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 var rnd *renderer.Render
@@ -54,6 +57,26 @@ func init() {
 	defer cancel()
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-	checkerr
+	checkerr(err)
 
+	err = client.Ping(ctx, readpref.Primary())
+	checkerr(err)
+
+	db = client.Database(dbname)
+
+}
+
+func main() {
+	fmt.Println("helloo")
+	server := &http.Server{
+		Addr:         ":9000",
+		Handler:      chi.NewRouter(),
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+	}
+
+	fmt.Println("server starting at port 9000")
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
