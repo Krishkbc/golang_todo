@@ -70,7 +70,11 @@ func checkerr(err error) {
 func init() {
 	fmt.Println("starting the application")
 
-	rnd = renderer.New()
+	rnd = renderer.New(
+		renderer.Options{
+			ParseGlobPattern: "./html/*.html",
+		},
+	)
 	var err error
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -87,9 +91,12 @@ func init() {
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
-	filepath := "./README.md"
-	err := rnd.FileView(w, http.StatusOK, filepath, "readme.md")
-	checkerr(err)
+	// filepath := "./README.md"
+	// err := rnd.FileView(w, http.StatusOK, filepath, "readme.md")
+	// checkerr(err)
+
+	err := rnd.HTML(w, http.StatusOK, "indexPage", nil)
+	_ = err
 }
 
 func main() {
@@ -97,6 +104,9 @@ func main() {
 
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
+	fs := http.FileServer(http.Dir("./static"))
+	router.Handle("/static/*", http.StripPrefix("/static/", fs))
+
 	router.Get("/", homeHandler)
 	router.Mount("/todo", todoHandler())
 
