@@ -2,15 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
-	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/thedevsaddam/renderer"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -46,6 +48,15 @@ type (
 	GetTodoResponse struct {
 		Message string `json:"message"`
 		Data    []Todo `json:"data"`
+	}
+
+	CreateTodo struct {
+		Title string `json:"title"`
+	}
+
+	UpdateTodo struct {
+		Title     string `json:""title"`
+		completed bool   `json:"completed"`
 	}
 )
 
@@ -166,4 +177,87 @@ func getTodos(w http.ResponseWriter, r *http.Request) {
 		Data:    todoList,
 	})
 
+}
+
+func createTodo(w http.ResponseWriter, r *http.Request) {
+	var todoreq CreateTodo
+	if err := json.NewDecoder(r.Body).Decode(&todoreq); err != nil {
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid request payload",
+		})
+		return
+	}
+
+	if todoreq.Title == "" {
+		log.Printf("no title added in the todo ")
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Title is required",
+		})
+		return
+	}
+
+	todoModel := TodoModel{
+		ID:        primitive.NewObjectID(),
+		Title:     todoreq.Title,
+		Completed: false,
+		CreatedAt: time.Now(),
+	}
+
+	data, err := db.Collection(collectionName).InsertOne(context.Background(), todoModel)
+	if err != nil {
+		log.Printf("failed to insert the data into the database %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Could not create the todo",
+		})
+		return
+	}
+	rnd.JSON(w, http.StatusCreated, renderer.M{
+		"message": "Todo created successfully",
+		"ID":      data.InsertedID,
+	})
+}
+
+func updateTodo(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+
+	res, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		log.Printf("failed to convert the id to object id %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid id",
+		})
+		return
+	}
+
+	var updatetodoreq UpdateTodo
+
+	if err := json.NewDecoder(r.Body).Decode(&updatetodoreq); err != nil {
+		log.Printf("failed to decode the request body %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, err.Error())
+	}
+
+	if updatetodoreq.Title == "" {
+		log.Printf("no title added in the database ")
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Title is required",
+		})
+		return
+	}
+
+	filter := bson.M{"id": res}
+	update := bson.M{"$set": bson.M{"title": updatetodoreq.Title, "completed": updatetodoreq.completed}}
+	data, err := db.Collection(collectionName).UpdateOne(context.Background(), filter, update)
+
+	if err != nil {
+		log.Printf("failed to update the todo %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Could not update the todo",
+		})
+		return
+	}
+
+	rnd.JSON(w, http.StatusOK, renderer.M{
+		"message": "Todo updated successfully",
+		"ID":      data.ModifiedCount,
+	})
 }
