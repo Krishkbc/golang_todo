@@ -102,7 +102,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         ":9000",
-		Handler:      chi.NewRouter(),
+		Handler:      router,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
@@ -143,6 +143,7 @@ func todoHandler() http.Handler {
 		r.Put("/{id}", updateTodo)
 		r.Delete("/{id}", deleteTodo)
 	})
+	return router
 }
 
 func getTodos(w http.ResponseWriter, r *http.Request) {
@@ -260,4 +261,31 @@ func updateTodo(w http.ResponseWriter, r *http.Request) {
 		"message": "Todo updated successfully",
 		"ID":      data.ModifiedCount,
 	})
+}
+
+func deleteTodo(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(chi.URLParam(r, "id"))
+
+	res, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		log.Printf("failed to convert the id to object id %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Invalid id",
+		})
+		return
+	}
+	filter := bson.M{"id": res}
+	if data, err := db.Collection(collectionName).DeleteOne(r.Context(), filter); err != nil {
+		log.Printf("failed to delete the todo %v\n", err.Error())
+		rnd.JSON(w, http.StatusBadRequest, renderer.M{
+			"message": "Could not delete the todo",
+		})
+		return
+	} else {
+		rnd.JSON(w, http.StatusOK, renderer.M{
+			"message": "Todo deleted successfully",
+			"data":    data,
+		})
+	}
+
 }
